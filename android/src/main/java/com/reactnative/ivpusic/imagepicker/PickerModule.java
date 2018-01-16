@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Color;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
@@ -30,8 +29,7 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.modules.core.PermissionAwareActivity;
 import com.facebook.react.modules.core.PermissionListener;
-import com.yalantis.ucrop.UCrop;
-import com.yalantis.ucrop.UCropActivity;
+import com.theartofdev.edmodo.cropper.CropImage;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -69,22 +67,9 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
     private boolean includeBase64 = false;
     private boolean includeExif = false;
     private boolean cropping = false;
-    private boolean cropperCircleOverlay = false;
-    private boolean showCropGuidelines = true;
-    private boolean hideBottomControls = false;
-    private boolean enableRotationGesture = false;
     private ReadableMap options;
 
-
-    //Grey 800
-    private final String DEFAULT_TINT = "#424242";
-    private String cropperActiveWidgetColor = DEFAULT_TINT;
-    private String cropperStatusBarColor = DEFAULT_TINT;
-    private String cropperToolbarColor = DEFAULT_TINT;
-    private String cropperToolbarTitle = null;
-
     //Light Blue 500
-    private final String DEFAULT_WIDGET_COLOR = "#03A9F4";
     private int width = 200;
     private int height = 200;
 
@@ -118,14 +103,6 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
         width = options.hasKey("width") ? options.getInt("width") : width;
         height = options.hasKey("height") ? options.getInt("height") : height;
         cropping = options.hasKey("cropping") ? options.getBoolean("cropping") : cropping;
-        cropperActiveWidgetColor = options.hasKey("cropperActiveWidgetColor") ? options.getString("cropperActiveWidgetColor") : cropperActiveWidgetColor;
-        cropperStatusBarColor = options.hasKey("cropperStatusBarColor") ? options.getString("cropperStatusBarColor") : cropperStatusBarColor;
-        cropperToolbarColor = options.hasKey("cropperToolbarColor") ? options.getString("cropperToolbarColor") : cropperToolbarColor;
-        cropperToolbarTitle = options.hasKey("cropperToolbarTitle") ? options.getString("cropperToolbarTitle") : null;
-        cropperCircleOverlay = options.hasKey("cropperCircleOverlay") ? options.getBoolean("cropperCircleOverlay") : cropperCircleOverlay;
-        showCropGuidelines = options.hasKey("showCropGuidelines") ? options.getBoolean("showCropGuidelines") : showCropGuidelines;
-        hideBottomControls = options.hasKey("hideBottomControls") ? options.getBoolean("hideBottomControls") : hideBottomControls;
-        enableRotationGesture = options.hasKey("enableRotationGesture") ? options.getBoolean("enableRotationGesture") : enableRotationGesture;
         this.options = options;
     }
 
@@ -559,48 +536,14 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
         return image;
     }
 
-    private void configureCropperColors(UCrop.Options options) {
-        int activeWidgetColor = Color.parseColor(cropperActiveWidgetColor);
-        int toolbarColor = Color.parseColor(cropperToolbarColor);
-        int statusBarColor = Color.parseColor(cropperStatusBarColor);
-        options.setToolbarColor(toolbarColor);
-        options.setStatusBarColor(statusBarColor);
-        if (activeWidgetColor == Color.parseColor(DEFAULT_TINT)) {
-            /*
-            Default tint is grey => use a more flashy color that stands out more as the call to action
-            Here we use 'Light Blue 500' from https://material.google.com/style/color.html#color-color-palette
-            */
-            options.setActiveWidgetColor(Color.parseColor(DEFAULT_WIDGET_COLOR));
-        } else {
-            //If they pass a custom tint color in, we use this for everything
-            options.setActiveWidgetColor(activeWidgetColor);
-        }
-    }
-
     private void startCropping(Activity activity, Uri uri) {
-        UCrop.Options options = new UCrop.Options();
-        options.setCompressionFormat(Bitmap.CompressFormat.JPEG);
-        options.setCompressionQuality(100);
-        options.setCircleDimmedLayer(cropperCircleOverlay);
-        options.setShowCropGrid(showCropGuidelines);
-        options.setHideBottomControls(hideBottomControls);
-        if (cropperToolbarTitle != null) {
-            options.setToolbarTitle(cropperToolbarTitle);
-        }
-        if (enableRotationGesture) {
-            // UCropActivity.ALL = enable both rotation & scaling
-            options.setAllowedGestures(
-                    UCropActivity.ALL, // When 'scale'-tab active
-                    UCropActivity.ALL, // When 'rotate'-tab active
-                    UCropActivity.ALL  // When 'aspect ratio'-tab active
-            );
-        }
-        configureCropperColors(options);
-
-        UCrop.of(uri, Uri.fromFile(new File(this.getTmpDir(activity), UUID.randomUUID().toString() + ".jpg")))
-                .withMaxResultSize(width, height)
-                .withAspectRatio(width, height)
-                .withOptions(options)
+        CropImage.activity(uri)
+                .setAllowRotation(false)
+                .setAllowFlipping(false)
+                .setFixAspectRatio(true)
+                .setAspectRatio(16, 9)
+                .setOutputCompressFormat(Bitmap.CompressFormat.JPEG)
+                .setOutputCompressQuality(100)
                 .start(activity);
     }
 
@@ -659,8 +602,6 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
             }
 
             if (cropping) {
-                UCrop.Options options = new UCrop.Options();
-                options.setCompressionFormat(Bitmap.CompressFormat.JPEG);
                 startCropping(activity, uri);
             } else {
                 try {
@@ -674,15 +615,16 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
     }
 
     private void croppingResult(Activity activity, final int requestCode, final int resultCode, final Intent data) {
-        if (data != null) {
-            final Uri resultUri = UCrop.getOutput(data);
+        if (data != null && resultCode == Activity.RESULT_OK) {
+            // get crop image view result
+            CropImage.ActivityResult result = CropImage.getActivityResult(data);
+
+            // get image uri
+            Uri resultUri = result.getUri();
             if (resultUri != null) {
                 try {
-                    WritableMap result = getSelection(activity, resultUri, false);
-                    result.putMap("cropRect", PickerModule.getCroppedRectMap(data));
-
                     resultCollector.setWaitCount(1);
-                    resultCollector.notifySuccess(result);
+                    resultCollector.notifySuccess(getSelection(activity, resultUri, false));
                 } catch (Exception ex) {
                     resultCollector.notifyProblem(E_NO_IMAGE_DATA_FOUND, ex.getMessage());
                 }
@@ -700,7 +642,7 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
             imagePickerResult(activity, requestCode, resultCode, data);
         } else if (requestCode == CAMERA_PICKER_REQUEST) {
             cameraPickerResult(activity, requestCode, resultCode, data);
-        } else if (requestCode == UCrop.REQUEST_CROP) {
+        } else if (requestCode == CropImage.CROP_IMAGE_ACTIVITY_REQUEST_CODE) {
             croppingResult(activity, requestCode, resultCode, data);
         }
     }
@@ -731,17 +673,5 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
 
         return image;
 
-    }
-
-    private static WritableMap getCroppedRectMap(Intent data) {
-        final int DEFAULT_VALUE = -1;
-        final WritableMap map = new WritableNativeMap();
-
-        map.putInt("x", data.getIntExtra(UCrop.EXTRA_OUTPUT_OFFSET_X, DEFAULT_VALUE));
-        map.putInt("y", data.getIntExtra(UCrop.EXTRA_OUTPUT_OFFSET_Y, DEFAULT_VALUE));
-        map.putInt("width", data.getIntExtra(UCrop.EXTRA_OUTPUT_IMAGE_WIDTH, DEFAULT_VALUE));
-        map.putInt("height", data.getIntExtra(UCrop.EXTRA_OUTPUT_IMAGE_HEIGHT, DEFAULT_VALUE));
-
-        return map;
     }
 }
