@@ -16,6 +16,7 @@ import java.io.IOException;
  */
 
 class Compression {
+    private static final double bufferSize = 1.5d;
 
     File compressImage(final Activity activity, final ReadableMap options, final String originalImagePath) throws IOException {
         // default image compress size
@@ -49,12 +50,12 @@ class Compression {
 
         if (maxWidth != null) {
             Log.d("image-crop-picker", "Compressing image with max width " + maxWidth);
-            compressor.setMaxWidth(maxWidth);
+            compressor.setMaxWidth((int) (maxWidth * bufferSize));
         }
 
         if (maxHeight != null) {
             Log.d("image-crop-picker", "Compressing image with max height " + maxHeight);
-            compressor.setMaxHeight(maxHeight);
+            compressor.setMaxHeight((int) (maxHeight * bufferSize));
         }
 
         File image = new File(originalImagePath);
