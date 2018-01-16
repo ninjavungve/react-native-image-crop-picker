@@ -18,8 +18,14 @@ import java.io.IOException;
 class Compression {
 
     File compressImage(final Activity activity, final ReadableMap options, final String originalImagePath) throws IOException {
-        Integer maxWidth = options.hasKey("compressImageMaxWidth") ? options.getInt("compressImageMaxWidth") : null;
-        Integer maxHeight = options.hasKey("compressImageMaxHeight") ? options.getInt("compressImageMaxHeight") : null;
+        // default image compress size
+        Integer maxWidth = options.hasKey("width") ? options.getInt("width") : null;
+        Integer maxHeight = options.hasKey("height") ? options.getInt("height") : null;
+
+        // resize with options has compress image size
+        maxWidth = options.hasKey("compressImageMaxWidth") ? options.getInt("compressImageMaxWidth") : maxWidth;
+        maxHeight = options.hasKey("compressImageMaxHeight") ? options.getInt("compressImageMaxHeight") : maxHeight;
+
         Double quality = options.hasKey("compressImageQuality") ? options.getDouble("compressImageQuality") : null;
 
         if (maxWidth == null && maxHeight == null && quality == null) {
@@ -51,14 +57,14 @@ class Compression {
             compressor.setMaxHeight(maxHeight);
         }
 
-        File image = new File(originalImagePath); 
+        File image = new File(originalImagePath);
 
         String[] paths = image.getName().split("\\.(?=[^\\.]+$)");
         String compressedFileName = paths[0] + "-compressed";
-        
+
         if(paths.length > 1)
             compressedFileName += "." + paths[1];
-        
+
         return compressor
                 .compressToFile(image, compressedFileName);
     }
